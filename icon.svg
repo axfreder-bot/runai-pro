@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#F97316"/>
+  <text x="256" y="330" font-size="220" font-family="Arial Black, sans-serif" font-weight="900" text-anchor="middle" fill="white">R</text>
+  <text x="256" y="420" font-size="80" font-family="Arial, sans-serif" font-weight="700" text-anchor="middle" fill="white" opacity="0.8">PLAN</text>
+</svg>

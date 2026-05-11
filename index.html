@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="RunPlan">
+  <meta name="theme-color" content="#F97316">
+  <meta name="description" content="Victoria Marathon 2026 Training Plan">
+  <title>RunPlan — Victoria Marathon 2026</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Tab Bar -->
+    <nav id="tab-bar">
+      <button class="tab-btn active" data-tab="today" onclick="switchTab('today')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>Today</span>
+      </button>
+      <button class="tab-btn" data-tab="week" onclick="switchTab('week')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <span>Week</span>
+      </button>
+      <button class="tab-btn" data-tab="progress" onclick="switchTab('progress')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span>Progress</span>
+      </button>
+      <button class="tab-btn" data-tab="summary" onclick="switchTab('summary')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>Summary</span>
+      </button>
+      <button class="tab-btn" data-tab="feedback" onclick="switchTab('feedback')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>Log</span>
+      </button>
+      <button class="tab-btn" data-tab="plans" onclick="openCreatePlanModal()" aria-label="Create new plan">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Plans</span>
+      </button>
+    </nav>
+
+    <!-- Confetti canvas -->
+    <canvas id="confetti-canvas"></canvas>
+
+    <!-- Today Tab -->
+    <div id="tab-today" class="tab-content active">
+      <!-- 1. Countdown hero -->
+      <div class="countdown-hero" id="countdown-hero" style="display:none">
+        <div class="countdown-hero-inner">
+          <div class="countdown-hero-label">Days to Victoria Marathon</div>
+          <div class="countdown-hero-days" id="countdown-hero-days">—</div>
+          <div class="countdown-hero-date">October 11, 2026</div>
+          <div class="countdown-hero-pace">
+            <span class="countdown-hero-pace-val">3:05</span>
+            <span class="countdown-hero-pace-unit">goal</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-header">
+        <div class="header-date" id="today-date">Loading...</div>
+        <div class="header-phase" id="today-phase"></div>
+      </div>
+
+      <div id="today-loading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading training plan...</p>
+        <button class="btn btn-primary" onclick="syncFromSheet()">Sync from Google Sheet</button>
+      </div>
+
+      <div id="today-empty" class="empty-state" style="display:none">
+        <div class="empty-icon">🏃</div>
+        <h3 id="empty-title">No workout for today</h3>
+        <p id="empty-subtitle">Sync from Google Sheet to load your plan</p>
+        <button class="btn btn-primary" onclick="syncFromSheet()">Sync Plan</button>
+      </div>
+
+      <div id="today-content" style="display:none">
+        <!-- Phase info -->
+        <div class="phase-card">
+          <div class="phase-row">
+            <span class="phase-label">Week <span id="today-week">—</span></span>
+            <span class="phase-sep">·</span>
+            <span class="phase-label" id="today-mpw">—</span>
+          </div>
+        </div>
+
+        <!-- Workout cards injected here -->
+        <div id="workout-cards"></div>
+
+        <!-- 2. Workout detail panel (slide-up) -->
+        <div class="workout-detail-panel" id="workout-detail-panel" style="display:none">
+          <div class="detail-panel-header">
+            <span class="detail-panel-title" id="detail-title">Workout Details</span>
+            <button class="detail-close" onclick="closeWorkoutDetail()">✕</button>
+          </div>
+          <div class="detail-panel-body" id="detail-body">
+            <div class="detail-row" id="detail-pace">
+              <span class="detail-label">🎯 Pace Target</span>
+              <span class="detail-val" id="detail-pace-val">—</span>
+            </div>
+            <div class="detail-row" id="detail-hr">
+              <span class="detail-label">❤️ HR Context</span>
+              <span class="detail-val" id="detail-hr-val">—</span>
+            </div>
+            <div class="detail-desc" id="detail-desc"></div>
+            <button class="btn btn-secondary share-btn" id="detail-share-btn" onclick="shareWorkout()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              Share
+            </button>
+          </div>
+        </div>
+
+        <!-- HR Zones (shown on quality days) -->
+        <div id="hr-zones-card" class="card" style="display:none">
+          <div class="card-header">
+            <span class="card-icon" style="color:#ef4444">❤️</span>
+            <h3>Heart Rate Zones</h3>
+          </div>
+          <div class="hr-zones">
+            <div class="hr-row"><span class="hr-badge z1">Z1</span><span class="hr-range">120–137 bpm</span><span class="hr-desc">Recovery / Very Easy</span></div>
+            <div class="hr-row"><span class="hr-badge z2">Z2</span><span class="hr-range">137–152 bpm</span><span class="hr-desc">Aerobic Base / Easy</span></div>
+            <div class="hr-row"><span class="hr-badge z3">Z3</span><span class="hr-range">152–161 bpm</span><span class="hr-desc">Tempo / Threshold</span></div>
+            <div class="hr-row"><span class="hr-badge z4">Z4</span><span class="hr-range">161–171 bpm</span><span class="hr-desc">LTHR / VO2max</span></div>
+            <div class="hr-row"><span class="hr-badge z5">Z5</span><span class="hr-range">171+ bpm</span><span class="hr-desc">Anaerobic / Max</span></div>
+            <div class="lthr-row">
+              <span>Your LTHR</span>
+              <span class="lthr-val">171 bpm</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="action-buttons">
+          <button class="btn btn-secondary" id="btn-pace-calc" onclick="openPaceCalc()">
+            🎯 Pace Calculator
+          </button>
+          <button class="btn btn-garmin" id="btn-garmin" onclick="sendToGarmin()" style="display:none">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+            Send to Garmin
+          </button>
+          <div id="garmin-status" class="garmin-status"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Week Tab -->
+    <div id="tab-week" class="tab-content">
+      <div class="tab-header">
+        <div class="header-title">Training Plan</div>
+      </div>
+      <div class="week-selector" id="week-selector"></div>
+      <div id="week-content"></div>
+    </div>
+
+    <!-- Progress Tab -->
+    <div id="tab-progress" class="tab-content">
+      <div class="tab-header">
+        <div class="header-title">Progress</div>
+      </div>
+      <div id="progress-content">
+        <!-- 7. Weekly mileage bar chart -->
+        <div class="mileage-chart" id="mileage-chart" style="display:none">
+          <div class="mileage-title">Weekly Mileage</div>
+          <div class="mileage-bars" id="mileage-bars"></div>
+        </div>
+
+        <div class="summary-cards" id="summary-cards"></div>
+        <div class="phase-list" id="phase-list"></div>
+        <div class="stats-card card">
+          <h3>Training Stats</h3>
+          <div class="stats-rows" id="stats-rows"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary Tab -->
+    <div id="tab-summary" class="tab-content">
+      <div class="tab-header">
+        <div class="header-title">Plan Summary</div>
+      </div>
+      <div id="summary-content">
+        <div class="summary-race-card" id="summary-race-card"></div>
+        <div class="summary-phases" id="summary-phases"></div>
+        <div class="summary-hr-zones card">
+          <h3>HR Zones (LTHR 171 bpm)</h3>
+          <div class="hr-zones" id="summary-hr-zones"></div>
+        </div>
+        <div class="summary-checkpoints" id="summary-checkpoints"></div>
+        <div class="summary-strength" id="summary-strength"></div>
+        <div class="adaptation-panel" id="adaptation-panel" style="display:none">
+          <div class="adaptation-header">
+            <div class="adaptation-title">🧠 Coach Recommendations</div>
+          </div>
+          <div class="adaptation-content" id="adaptation-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feedback Tab -->
+    <div id="tab-feedback" class="tab-content">
+      <div class="tab-header">
+        <div class="header-title">Workout Log</div>
+      </div>
+      <div id="feedback-content">
+        <div class="feedback-today" id="feedback-today"></div>
+        <div class="feedback-quick-log" id="feedback-quick-log"></div>
+        <div class="feedback-history" id="feedback-history"></div>
+        <div class="checkpoint-status" id="checkpoint-status"></div>
+      </div>
+    </div>
+
+    <!-- Plans Tab (multi-plan manager) -->
+    <div id="tab-plans" class="tab-content">
+      <div class="tab-header">
+        <div class="header-title">Training Plans</div>
+        <button class="btn btn-primary btn-sm" onclick="openCreatePlanModal()">+ New Plan</button>
+      </div>
+      <div id="plans-content"></div>
+    </div>
+  </div>
+
+  <!-- Sync Modal -->
+  <div id="sync-modal" class="modal" style="display:none">
+    <div class="modal-content">
+      <h3>⚙️ First-Time Setup</h3>
+      <p>To sync your training plan, the app needs your Google access token.</p>
+      <p class="token-note">Run this once in Terminal:</p>
+      <code class="token-box">python3 -c "import json; t=json.load(open('/Users/openclaw/Library/Application Support/gogcli/tokens.json')); print(t['access_token'])" | pbcopy</code>
+      <p class="token-note">Then paste it below:</p>
+      <input type="text" id="token-input" placeholder="Paste access token..." class="token-input">
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveToken()">Save & Sync</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Pace Calculator Modal -->
+  <div id="pace-calc-modal" class="modal" style="display:none">
+    <div class="modal-header">
+      <h3>🎯 Pace Calculator</h3>
+      <button class="modal-close" onclick="closePaceCalc()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="pace-input-row">
+        <label>Distance</label>
+        <input type="number" id="pace-distance" placeholder="e.g. 26.2" step="0.1" min="0">
+        <span class="pace-unit">miles</span>
+      </div>
+      <div class="pace-input-row">
+        <label>Target Time</label>
+        <input type="text" id="pace-hours" placeholder="HH" size="2" maxlength="2"> :
+        <input type="text" id="pace-minutes" placeholder="MM" size="2" maxlength="2"> :
+        <input type="text" id="pace-seconds" placeholder="SS" size="2" maxlength="2">
+      </div>
+      <button class="btn btn-primary" onclick="calculatePace()">Calculate</button>
+      <div class="pace-results" id="pace-results" style="display:none">
+        <div class="pace-result-row">
+          <span class="pace-result-label">Pace</span>
+          <span class="pace-result-val" id="pace-per-mile">— /mi</span>
+        </div>
+        <div class="pace-result-row">
+          <span class="pace-result-label">Per km</span>
+          <span class="pace-result-val" id="pace-per-km">— /km</span>
+        </div>
+        <div class="pace-split-table" id="pace-split-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Garmin Sync Modal -->
+  <div id="garmin-modal" class="modal" style="display:none">
+    <div class="modal-header">
+      <h3>Garmin Activities</h3>
+      <button class="modal-close" onclick="closeGarminModal()">✕</button>
+    </div>
+    <div id="garmin-activities">
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Syncing from Garmin...</p>
+      </div>
+    </div>
+    <!-- 6. RPE logging -->
+    <div class="rpe-section" id="rpe-section" style="display:none">
+      <div class="rpe-label">How was today's workout?</div>
+      <div class="rpe-buttons">
+        <button class="rpe-btn" data-rpe="1" onclick="selectRPE(1)">1</button>
+        <button class="rpe-btn" data-rpe="2" onclick="selectRPE(2)">2</button>
+        <button class="rpe-btn" data-rpe="3" onclick="selectRPE(3)">3</button>
+        <button class="rpe-btn" data-rpe="4" onclick="selectRPE(4)">4</button>
+        <button class="rpe-btn" data-rpe="5" onclick="selectRPE(5)">5</button>
+        <button class="rpe-btn" data-rpe="6" onclick="selectRPE(6)">6</button>
+        <button class="rpe-btn" data-rpe="7" onclick="selectRPE(7)">7</button>
+        <button class="rpe-btn" data-rpe="8" onclick="selectRPE(8)">8</button>
+        <button class="rpe-btn" data-rpe="9" onclick="selectRPE(9)">9</button>
+        <button class="rpe-btn" data-rpe="10" onclick="selectRPE(10)">10</button>
+      </div>
+      <div class="rpe-submit-row">
+        <button class="btn btn-primary btn-sm" id="rpe-submit" onclick="submitRPE()">Log RPE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Plan Modal -->
+  <div id="create-plan-modal" class="modal" style="display:none">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Create New Training Plan</h3>
+        <button class="modal-close" onclick="closeCreatePlanModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="plan-setup-intro">
+          <p>3 questions to generate a scientifically structured, fully adaptable marathon training plan.</p>
+        </div>
+
+        <div class="plan-field">
+          <label>🏃 What race are you training for?</label>
+          <input type="text" id="plan-race-name" placeholder="e.g. Chicago Marathon 2026">
+          <div class="plan-field-sub">Full race name</div>
+        </div>
+
+        <div class="plan-field">
+          <label>📅 Race date</label>
+          <input type="date" id="plan-race-date">
+          <div class="plan-field-sub">When is the race?</div>
+        </div>
+
+        <div class="plan-field">
+          <label>🎯 Goal finish time</label>
+          <div class="plan-time-input">
+            <input type="number" id="plan-hours" min="2" max="6" placeholder="3">
+            <span>hr</span>
+            <input type="number" id="plan-minutes" min="0" max="59" placeholder="30">
+            <span>min</span>
+          </div>
+          <div class="plan-field-sub">What time do you want to finish in?</div>
+        </div>
+
+        <div class="plan-field">
+          <label>📊 Current fitness level</label>
+          <div class="plan-fitness-selector">
+            <button class="fitness-option" data-fitness="beginner" onclick="selectFitness('beginner')">
+              <div class="fitness-label">Beginner</div>
+              <div class="fitness-desc">First marathon or &gt;5:00/mi</div>
+            </button>
+            <button class="fitness-option" data-fitness="intermediate" onclick="selectFitness('intermediate')">
+              <div class="fitness-label">Intermediate</div>
+              <div class="fitness-desc">4:00–5:00/mi pace</div>
+            </button>
+            <button class="fitness-option" data-fitness="advanced" onclick="selectFitness('advanced')">
+              <div class="fitness-label">Advanced</div>
+              <div class="fitness-desc">&lt;4:00/mi or sub-3:30</div>
+            </button>
+          </div>
+          <div class="plan-field-sub">Based on recent race or honest self-assessment</div>
+        </div>
+
+        <div class="plan-optional">
+          <div class="plan-optional-toggle" onclick="toggleOptionalFields()">
+            <span>⚙️ Advanced options (optional)</span>
+            <span id="optional-chevron">▶</span>
+          </div>
+          <div id="optional-fields" style="display:none">
+            <div class="plan-field">
+              <label>❤️ Recent marathon time (optional)</label>
+              <div class="plan-time-input">
+                <input type="number" id="plan-last-hours" min="2" max="7" placeholder="4">
+                <span>hr</span>
+                <input type="number" id="plan-last-minutes" min="0" max="59" placeholder="10">
+                <span>min</span>
+              </div>
+              <div class="plan-field-sub">Used to calibrate starting fitness more precisely</div>
+            </div>
+            <div class="plan-field">
+              <label>💓 Lab-tested LTHR (optional)</label>
+              <input type="number" id="plan-lthr" placeholder="e.g. 171" min="140" max="200">
+              <div class="plan-field-sub">Leave blank to estimate from age (220-age × 0.92)</div>
+            </div>
+            <div class="plan-field">
+              <label>🦵 History of ITBS or knee pain?</label>
+              <div class="plan-bool-selector">
+                <button class="bool-btn" data-val="no" onclick="selectBool('itbs','no')">No</button>
+                <button class="bool-btn" data-val="yes" onclick="selectBool('itbs','yes')">Yes</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="generatePlan()">Generate Plan →</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+    <script src="plan-definition.js"></script>
+    <script src="athlete-profile.js"></script>
+    <script src="adaptation-engine.js"></script>
+</body>
+</html>
