@@ -1,8 +1,9 @@
 // ===== STATE =====
 const SPREADSHEET_ID = '1CTL73bUHivzWoQKTb8zdJfxJPMl9ItVtDS30CecdJXo';
 const SHEET_NAME = 'Training Log';
-const GARMIN_PROXY = 'https://disparate-chloride-cinnamon.ngrok-free.dev';
 const RACE_DATE = new Date('2026-10-11');
+const STRAVA_PROXY = 'https://runai-pro-strava.workers.dev/api/strava';
+const STRAVA_CLIENT_ID = '204938';
 
 let state = {
   trainingDays: [],
@@ -14,13 +15,17 @@ let state = {
   garminActivities: [],
   garminActivityDates: [],
   rpeLog: [],
-  selectedDetailDay: null
+  selectedDetailDay: null,
+  stravaToken: null,
+  stravaAthleteId: null,
+  stravaExpiry: null
 };
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
   loadFromStorage();
   loadRPEFromStorage();
+  initStrava();
   renderCountdown();
   renderToday();
   renderWeek();
@@ -34,6 +39,104 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.addEventListener('online', updateOnlineStatus);
 window.addEventListener('offline', updateOnlineStatus);
+
+// ===== STRAVA INIT — runs once on load =====
+function initStrava() {
+  // Load stored tokens from localStorage
+  const stored = localStorage.getItem('strava_tokens');
+  if (stored) {
+    try {
+      const tokens = JSON.parse(stored);
+      state.stravaToken = tokens.access_token || null;
+      state.stravaAthleteId = tokens.athlete_id || null;
+      state.stravaExpiry = tokens.expires_at ? new Date(tokens.expires_at * 1000) : null;
+    } catch(e) { /* corrupt storage — clear */ }
+  }
+
+  // Parse OAuth redirect hash on page load
+  const hash = window.location.hash;
+  if (hash.startsWith('#strava=')) {
+    const fragment = hash.slice(8); // strip '#strava='
+    try {
+      const decoded = JSON.parse(atob(fragment.replace(/-/g, '+').replace(/_/g, '/')));
+      state.stravaToken = decoded.at || null;
+      state.stravaAthleteId = decoded.aid || null;
+      state.stravaExpiry = decoded.ex ? new Date(decoded.ex * 1000) : null;
+
+      // Persist tokens
+      localStorage.setItem('strava_tokens', JSON.stringify({
+        access_token: decoded.at,
+        refresh_token: decoded.rt,
+        expires_at: decoded.ex,
+        athlete_id: decoded.aid,
+        athlete_name: decoded.an
+      }));
+
+      // Show connected toast
+      showToast(`Strava connected — ${decoded.an || 'Athlete'}`);
+    } catch(e) {
+      showToast('Strava auth failed — try again');
+    }
+    // Clean the hash from URL without reload
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  } else if (hash.startsWith('#strava-error=')) {
+    const err = decodeURIComponent(hash.slice(14));
+    showToast(`Strava: ${err}`);
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+}
+
+async function ensureStravaToken() {
+  if (!state.stravaToken || !state.stravaExpiry) return false;
+  // If token expires in <5 min, refresh first
+  if (state.stravaExpiry.getTime() - Date.now() < 5 * 60 * 1000) {
+    return await refreshStravaToken();
+  }
+  return true;
+}
+
+async function refreshStravaToken() {
+  const stored = JSON.parse(localStorage.getItem('strava_tokens') || '{}');
+  if (!stored.refresh_token) return false;
+
+  try {
+    const resp = await fetch(`${STRAVA_PROXY}/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: stored.refresh_token })
+    });
+    if (!resp.ok) return false;
+    const data = await resp.json();
+
+    state.stravaToken = data.access_token;
+    state.stravaExpiry = new Date(data.expires_at * 1000);
+
+    localStorage.setItem('strava_tokens', JSON.stringify({
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at: data.expires_at,
+      athlete_id: state.stravaAthleteId
+    }));
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
+
+function connectStrava() {
+  const redirectUri = encodeURIComponent('https://runai-pro-strava.workers.dev/api/strava/callback');
+  const scope = encodeURIComponent('activity:read');
+  window.location.href =
+    `https://www.strava.com/oauth/authorize?client_id=${STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${redirectUri}&scope=${scope}`;
+}
+
+function disconnectStrava() {
+  state.stravaToken = null;
+  state.stravaAthleteId = null;
+  state.stravaExpiry = null;
+  localStorage.removeItem('strava_tokens');
+  showToast('Strava disconnected');
+}
 
 // ===== STORAGE =====
 function saveToStorage() {
@@ -556,10 +659,27 @@ function getWorkoutGuideInfo(day) {
 
 function renderGarminButton(day) {
   const btn = document.getElementById('btn-garmin');
-  if (day.type !== 'Rest' && day.type !== 'Bike') {
+  if (!day) {
+    // No plan loaded yet — show button that opens modal to connect Strava
     btn.style.display = 'flex';
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.onclick = openGarminModal;
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Strava Connect';
+    return;
+  }
+  if (day.type === 'Rest' || day.type === 'Bike') {
+    btn.style.display = 'flex';
+    btn.disabled = true;
+    btn.style.opacity = '0.4';
+    btn.onclick = null;
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Rest Day';
   } else {
-    btn.style.display = 'none';
+    btn.style.display = 'flex';
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.onclick = openGarminModal;
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Garmin / Strava';
   }
 }
 
@@ -917,43 +1037,158 @@ function estimateDuration(day) {
   return Math.round(miles * pace);
 }
 
-// ===== GARMIN SYNC MODAL =====
+// ===== GARMIN SYNC MODAL (now Strava-backed) =====
 function openGarminModal() {
   document.getElementById('garmin-modal').style.display = 'block';
-  syncGarminActivities();
+  syncActivities();
 }
 
 function closeGarminModal() {
   document.getElementById('garmin-modal').style.display = 'none';
 }
 
-async function syncGarminActivities() {
+// Main sync function — tries Strava, falls back to manual
+async function syncActivities() {
   const container = document.getElementById('garmin-activities');
-  container.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Syncing from Garmin...</p></div>';
+  container.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Syncing activities...</p></div>';
+
+  // If no Strava token, show connect prompt
+  if (!state.stravaToken) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🔗</div>
+        <p>Connect Strava to sync your activities automatically</p>
+        <button class="btn btn-strava" onclick="connectStrava(); closeGarminModal();" style="margin-top:12px">
+          🔗 Connect Strava
+        </button>
+        <div style="margin-top:16px">
+          <button class="btn btn-secondary btn-sm" onclick="openFeedbackForm()">Log Manually</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // Ensure fresh token
+  const hasToken = await ensureStravaToken();
+  if (!hasToken) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <p>Strava session expired. Please reconnect.</p>
+        <button class="btn btn-strava" onclick="connectStrava(); closeGarminModal();">Reconnect Strava</button>
+      </div>
+    `;
+    return;
+  }
 
   try {
     const after = new Date();
-    after.setDate(after.getDate() - 7);
-    const resp = await fetch(`${GARMIN_PROXY}/garmin/activities?after=${after.toISOString()}`);
-    const activities = await resp.json();
+    after.setDate(after.getDate() - 14); // look back 2 weeks
+    const afterSec = Math.floor(after.getTime() / 1000);
 
-    if (!activities.length) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">⌚</div><p>No recent activities found</p></div>';
+    const resp = await fetch(`${STRAVA_PROXY}/activity`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access_token: state.stravaToken, after: afterSec, per_page: 30 }),
+      signal: AbortSignal.timeout(8000)
+    });
+
+    if (resp.status === 401 || resp.status === 403) {
+      // Token no longer valid — refresh
+      const refreshed = await refreshStravaToken();
+      if (!refreshed) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">⚠️</div>
+            <p>Strava session expired. Please reconnect.</p>
+            <button class="btn btn-strava" onclick="connectStrava(); closeGarminModal();">Reconnect Strava</button>
+          </div>
+        `;
+        return;
+      }
+      // Retry with new token
+      return syncActivities();
+    }
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const raw = await resp.json();
+    if (!Array.isArray(raw) || raw.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">🏃</div><p>No recent activities found</p></div>';
       return;
     }
 
-    container.innerHTML = activities.map(a => `
-      <div class="activity-row">
-        <div>
-          <div class="activity-title">${a.title || a.type}</div>
-          <div class="activity-meta">${formatMiles(a.distance)} mi · ${formatDuration(a.duration)}</div>
+    // Normalize to same shape used by the app
+    const activities = raw.map(a => ({
+      title: a.name || a.type,
+      type: a.type,
+      date: a.startDateLocal || a.startDate,
+      distance: a.distance,
+      duration: a.duration,
+      hr: a.averageHeartrate ? Math.round(a.averageHeartrate) : null,
+      cadence: a.averageCadence ? Math.round(a.averageCadence * 2) : null // strava gives spm per leg
+    }));
+
+    // Stamp matching plan days with hasGarmin = true
+    if (activities.length > 0) {
+      const dateMap = {};
+      activities.forEach(a => {
+        const d = new Date(a.date);
+        d.setHours(0, 0, 0, 0);
+        dateMap[d.getTime()] = a;
+      });
+      state.trainingDays.forEach(d => {
+        const dd = new Date(d.date);
+        dd.setHours(0, 0, 0, 0);
+        if (dateMap[dd.getTime()]) {
+          d.hasGarmin = true;
+          d.garminHR = dateMap[dd.getTime()].hr;
+          d.garminCadence = dateMap[dd.getTime()].cadence;
+        }
+      });
+      saveToStorage();
+      renderWeek(); // refresh garmin badges
+    }
+
+    container.innerHTML = `
+      <div class="activities-synced-label">${activities.length} recent activities</div>
+      ${activities.map(a => `
+        <div class="activity-row">
+          <div>
+            <div class="activity-title">${a.title}</div>
+            <div class="activity-meta">
+              ${formatMiles(a.distance)} mi · ${formatDuration(a.duration)}
+              ${a.hr ? ` · ${a.hr} bpm` : ''}
+            </div>
+          </div>
+          <div class="activity-date">${new Date(a.date).toLocaleDateString()}</div>
         </div>
-        <div class="activity-date">${new Date(a.date).toLocaleDateString()}</div>
-      </div>
-    `).join('');
+      `).join('')}
+    `;
+
+    // Show RPE section now that activities are loaded
+    const rpeSection = document.getElementById('rpe-section');
+    if (rpeSection) rpeSection.style.display = 'block';
+
   } catch(e) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>Failed to sync: ${e.message}</p></div>`;
+    const isAbort = e.name === 'TimeoutError' || e.type === 'TimeoutError';
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <p>${isAbort ? 'Connection timed out' : 'Could not reach Strava'}</p>
+        <div style="margin-top:10px">
+          <button class="btn btn-secondary btn-sm" onclick="openFeedbackForm()">Log Manually</button>
+        </div>
+      </div>
+    `;
   }
+}
+
+function openFeedbackForm() {
+  // Fallback: open the Feedback tab for manual RPE entry
+  closeGarminModal();
+  switchTab('feedback');
 }
 
 // ===== EXERCISES =====

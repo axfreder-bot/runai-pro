@@ -230,8 +230,21 @@
   <!-- Sync Modal -->
   <div id="sync-modal" class="modal" style="display:none">
     <div class="modal-content">
-      <h3>⚙️ First-Time Setup</h3>
-      <p>To sync your training plan, the app needs your Google access token.</p>
+      <h3>⚙️ Sync Your Training Plan</h3>
+
+      <!-- Strava OAuth — recommended path -->
+      <div class="sync-strava-section">
+        <p>Connect via Strava to sync your activities automatically.</p>
+        <button class="btn btn-strava" onclick="connectStrava(); closeModal();">
+          🔗 Connect Strava
+        </button>
+        <p class="sync-note">Free, no terminal commands, works indefinitely.</p>
+      </div>
+
+      <div class="sync-divider">— or —</div>
+
+      <!-- Google Sheet sync — manual token -->
+      <p class="sync-google-label">Sync from Google Sheet:</p>
       <p class="token-note">Run this once in Terminal:</p>
       <code class="token-box">python3 -c "import json; t=json.load(open('/Users/openclaw/Library/Application Support/gogcli/tokens.json')); print(t['access_token'])" | pbcopy</code>
       <p class="token-note">Then paste it below:</p>

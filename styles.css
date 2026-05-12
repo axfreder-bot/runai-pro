@@ -776,10 +776,58 @@ body {
 
 .btn-garmin {
   background: #0066CC;
-  color: white;
 }
 
 .btn-garmin:active { background: #004c99; }
+
+.btn-strava {
+  background: #FC4C02;
+  color: white;
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-strava:active { background: #d43d00; }
+
+.sync-strava-section {
+  background: #fff8f5;
+  border: 1px solid #FC4C0220;
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.sync-strava-section p {
+  margin-bottom: 10px;
+}
+
+.sync-divider {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin: 16px 0;
+}
+
+.sync-google-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text) !important;
+  margin-top: 4px;
+}
+
+.sync-note {
+  font-size: 11px !important;
+  color: var(--text-secondary) !important;
+}
 
 .btn-secondary {
   background: var(--bg);
