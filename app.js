@@ -2,7 +2,7 @@
 const SPREADSHEET_ID = '1CTL73bUHivzWoQKTb8zdJfxJPMl9ItVtDS30CecdJXo';
 const SHEET_NAME = 'Training Log';
 const RACE_DATE = new Date('2026-10-11');
-const STRAVA_PROXY = 'https://runai-pro-strava.workers.dev/api/strava';
+const STRAVA_PROXY = 'https://runai-pro.pages.dev/api/strava';
 const STRAVA_CLIENT_ID = '204938';
 
 let state = {
@@ -124,7 +124,7 @@ async function refreshStravaToken() {
 }
 
 function connectStrava() {
-  const redirectUri = encodeURIComponent('https://runai-pro-strava.workers.dev/api/strava/callback');
+  const redirectUri = encodeURIComponent('https://runai-pro.pages.dev/api/strava/callback');
   const scope = encodeURIComponent('activity:read');
   window.location.href =
     `https://www.strava.com/oauth/authorize?client_id=${STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${redirectUri}&scope=${scope}`;
